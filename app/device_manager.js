@@ -1,15 +1,29 @@
-const logger = require('winston');
-const EventEmitter = require('events');
-const Connection = require('./connection');
-const { defaultKey } = require('./encryptor');
+const logger = require("winston");
+const EventEmitter = require("events");
+const Connection = require("./connection");
+const { defaultKey } = require("./encryptor");
 const TEMPERATURE_SENSOR_OFFSET = -40;
 
 // https://github.com/tomikaa87/gree-remote
 const statusKeys = [
-    'Pow', 'Mod', 'TemUn', 'SetTem', 'TemRec', 'WdSpd', 'Air',
-    'Blo', 'Health', 'SwhSlp', 'Lig', 'SwingLfRig', 'SwUpDn',
-    'Quiet', 'Tur', 'SvSt', 'TemSen'
-]
+    "Pow",
+    "Mod",
+    "TemUn",
+    "SetTem",
+    "TemRec",
+    "WdSpd",
+    "Air",
+    "Blo",
+    "Health",
+    "SwhSlp",
+    "Lig",
+    "SwingLfRig",
+    "SwUpDn",
+    "Quiet",
+    "Tur",
+    "SvSt",
+    "TemSen",
+];
 
 class DeviceManager extends EventEmitter {
     constructor(networkAddress) {
@@ -17,34 +31,43 @@ class DeviceManager extends EventEmitter {
         this.connection = new Connection(networkAddress);
         this.devices = {};
 
-        this.connection.on('dev', this._registerDevice.bind(this));
+        this.connection.on("dev", this._registerDevice.bind(this));
     }
 
     async _registerDevice(message, rinfo) {
         const deviceId = message.cid || message.mac;
-        logger.info(`New device found: ${message.name} (mac: ${deviceId}), binding...`)
+        logger.info(
+            `New device found: ${message.name} (mac: ${deviceId}), binding...`
+        );
         const { address, port } = rinfo;
 
-        const { key } = await this.connection.sendRequest(address, port, defaultKey, {
-            mac: deviceId,
-            t: 'bind',
-            uid: 0
-        });
+        const { key } = await this.connection.sendRequest(
+            address,
+            port,
+            defaultKey,
+            {
+                mac: deviceId,
+                t: "bind",
+                uid: 0,
+            }
+        );
 
         const device = {
             ...message,
             address,
             port,
             key,
-            t: undefined
+            t: undefined,
         };
 
         this.devices[deviceId] = device;
 
         this.connection.registerKey(deviceId, key);
 
-        this.emit('device_bound', deviceId, device);
-        logger.info(`New device bound: ${device.name} (${device.address}:${device.port})`);
+        this.emit("device_bound", deviceId, device);
+        logger.info(
+            `New device bound: ${device.name} (${device.address}:${device.port})`
+        );
 
         return device;
     }
@@ -63,20 +86,28 @@ class DeviceManager extends EventEmitter {
         const payload = {
             cols: statusKeys,
             mac: device.mac,
-            t: 'status'
+            t: "status",
         };
 
-        const response = await this.connection.sendRequest(device.address, device.port, device.key, payload);
-        const deviceStatus = response.cols.reduce((acc, key, index) => ({
-            ...acc,
-            [key]: response.dat[index]
-        }), {});
+        const response = await this.connection.sendRequest(
+            device.address,
+            device.port,
+            device.key,
+            payload
+        );
+        const deviceStatus = response.cols.reduce(
+            (acc, key, index) => ({
+                ...acc,
+                [key]: response.dat[index],
+            }),
+            {}
+        );
 
-        if('TemSen' in deviceStatus){
-        	deviceStatus['TemSen'] +=TEMPERATURE_SENSOR_OFFSET;
+        if ("TemSen" in deviceStatus) {
+            deviceStatus["TemSen"] += TEMPERATURE_SENSOR_OFFSET;
         }
 
-        this.emit('device_status', deviceId, deviceStatus);
+        this.emit("device_status", deviceId, deviceStatus);
         return deviceStatus;
     }
 
@@ -91,18 +122,26 @@ class DeviceManager extends EventEmitter {
             mac: device.mac,
             opt: Object.keys(state),
             p: Object.values(state),
-            t: 'cmd'
+            t: "cmd",
         };
 
-        const response = await this.connection.sendRequest(device.address, device.port, device.key, payload);
-        const deviceStatus = response.opt.reduce((acc, key, index) => ({
-            ...acc,
-            [key]: response.val[index]
-        }), {});
+        const response = await this.connection.sendRequest(
+            device.address,
+            device.port,
+            device.key,
+            payload
+        );
+        const deviceStatus = response.opt.reduce(
+            (acc, key, index) => ({
+                ...acc,
+                [key]: response.p[index],
+            }),
+            {}
+        );
 
-        this.emit('device_status', deviceId, deviceStatus);
+        this.emit("device_status", deviceId, deviceStatus);
         return deviceStatus;
     }
 }
 
-module.exports = DeviceManager
+module.exports = DeviceManager;
